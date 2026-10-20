@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calorías quemadas · Registro SQLite</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+<style>
+:root{--bg:#eef3f0;--surface:#fff;--ink:#12302b;--muted:#5b716c;--line:#d3dfda;--accent:#e8512a;--accent-ink:#fff;--soft:#dcebe5;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1f1c;--surface:#172b27;--ink:#e6f1ed;--muted:#97b0a9;--line:#2a443e;--accent:#ff6a42;--accent-ink:#1a0b06;--soft:#21403a;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 40px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:18px}
+h1{font-size:clamp(1.7rem,5vw,2.6rem);font-weight:800;margin:0;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:4px 0 0}
+.grid{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-bottom:16px}
+@media (max-width:780px){.grid{grid-template-columns:1fr}}
+section{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+h2{font-size:1.05rem;margin:0 0 12px;font-weight:600}
+label{display:block;font-size:.88rem;color:var(--muted);margin-bottom:4px}
+input,select{width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}.row>div{flex:1;min-width:130px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{font:inherit;font-size:.88rem;padding:6px 12px;border:0;background:var(--surface);color:var(--ink);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.units{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:.85rem;color:var(--muted)}
+.units span{display:flex;gap:6px;align-items:center}
+.acts{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:8px;margin-bottom:14px}
+.act{font:inherit;text-align:left;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);cursor:pointer}
+.act .e{font-size:1.35rem;display:block}.act small{color:var(--muted)}
+.act[aria-pressed=true]{border-color:var(--accent);background:var(--soft);box-shadow:inset 0 0 0 1px var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.result{text-align:center;padding:16px 8px;border-radius:12px;background:var(--soft);margin-bottom:12px}
+.big{font-size:clamp(2.8rem,9vw,4.2rem);font-weight:800;line-height:1;color:var(--accent)}
+.result p{margin:6px 0 0;color:var(--muted);font-size:.92rem}
+.btn{font:inherit;font-weight:600;padding:10px 14px;border:0;border-radius:10px;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn.full{width:100%;font-size:1.05rem;padding:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.alt{background:var(--bg);color:var(--ink);border:1px solid var(--line);font-weight:400;font-size:.88rem;padding:7px 12px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:var(--soft);border-radius:10px;padding:12px}
+.stat b{display:block;font-size:1.6rem;font-weight:800}.stat span{font-size:.82rem;color:var(--muted)}
+.status{font-size:.85rem;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--line);margin-bottom:12px}
+.status.err{border-color:var(--accent);color:var(--accent)}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:640px}
+th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:.82rem}
+td.k{font-weight:700}
+td button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:1.1rem}
+.note{font-size:.8rem;color:var(--muted);margin-top:16px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div><h1>Calorías quemadas</h1><p class="sub">Por tiempo o por distancia, con registro en una base SQLite.</p></div>
+<div class="units">
+<span>Peso <span class="seg" id="segW"><button type="button" data-u="kg" aria-pressed="true">kg</button><button type="button" data-u="lb" aria-pressed="false">lb</button></span></span>
+<span>Distancia <span class="seg" id="segD"><button type="button" data-u="km" aria-pressed="true">km</button><button type="button" data-u="mi" aria-pressed="false">mi</button></span></span>
+</div>
+</header>
+
+<div class="grid">
+<section aria-labelledby="h1c">
+<h2 id="h1c">Nueva actividad</h2>
+<div class="seg" id="segM" style="margin-bottom:14px">
+<button type="button" data-m="dist" aria-pressed="true">Por distancia</button>
+<button type="button" data-m="tiempo" aria-pressed="false">Por tiempo</button>
+</div>
+<div class="acts" id="acts"></div>
+<div class="row">
+<div><label for="peso" id="lPeso">Peso (kg)</label><input id="peso" type="number" min="1" step="0.1" value="70"></div>
+<div id="boxDist"><label for="dist" id="lDist">Distancia (km)</label><input id="dist" type="number" min="0" step="0.01" value="5"></div>
+<div><label for="min">Duración (minutos)</label><input id="min" type="number" min="1" step="1" value="30"></div>
+</div>
+<div class="row"><div><label for="cuando">Fecha y hora</label><input id="cuando" type="datetime-local"></div></div>
+<div class="result" aria-live="polite"><div class="big" id="kcal">0</div><p id="det">kilocalorías</p></div>
+<button class="btn full" id="add" disabled>Guardar en la base de datos</button>
+</section>
+
+<section aria-labelledby="h2c">
+<h2 id="h2c">Resumen</h2>
+<div class="status" id="status">Cargando SQLite…</div>
+<div class="stats">
+<div class="stat"><b id="sHoy">0</b><span>kcal hoy</span></div>
+<div class="stat"><b id="s7">0</b><span>kcal últimos 7 días</span></div>
+<div class="stat"><b id="sN">0</b><span>actividades guardadas</span></div>
+<div class="stat"><b id="sKm">0</b><span id="sKmL">km acumulados</span></div>
+</div>
+<div class="tools">
+<button class="btn alt" id="expDb">Descargar .sqlite</button>
+<button class="btn alt" id="expCsv">Descargar CSV</button>
+<button class="btn alt" id="impBtn">Importar .sqlite</button>
+<input type="file" id="impFile" accept=".sqlite,.db,.sqlite3" hidden>
+</div>
+</section>
+</div>
+
+<section aria-labelledby="h3c">
+<h2 id="h3c">Historial</h2>
+<div class="wrap"><table>
+<thead><tr><th>Fecha</th><th>Hora</th><th>Actividad</th><th>Duración</th><th id="thD">Distancia</th><th id="thV">Velocidad</th><th id="thP">Peso</th><th>kcal</th><th></th></tr></thead>
+<tbody id="rows"></tbody></table></div>
+<p id="vacio" class="note">Aún no hay registros.</p>
+</section>
+<p class="note">Fórmula: kcal = MET × peso (kg) × horas. En el modo por distancia, la velocidad media (distancia ÷ tiempo) determina el MET de cada deporte según el Compendio de Actividades Físicas; son estimaciones. Los datos se guardan en este navegador (IndexedDB) y puedes respaldarlos con “Descargar .sqlite”. La primera vez necesita internet para cargar la librería SQLite.</p>
+</main>
+
+<script>
+const KG_LB=2.20462, KM_MI=1.609344;
+const TIEMPO=[
+["Caminar","🚶",3.5],["Caminar rápido","🚶‍♂️",5],["Trotar","🏃",7],["Correr","🏃‍♀️",9.8],["Bicicleta suave","🚲",4],["Bicicleta moderada","🚴",8],
+["Bicicleta intensa","🚵",12],["Básquetbol","🏀",8],["Fútbol","⚽",7],["Voleibol","🏐",4],["Tenis","🎾",7.3],["Natación","🏊",5.8],
+["Bailar","💃",5],["Saltar la cuerda","🪢",11.8],["Pesas","🏋️",5],["Yoga","🧘",2.5],["Senderismo","🥾",6],["Subir escaleras","🪜",8.8],["Jugar con niños","🛝",4]
+].map(a=>({n:a[0],e:a[1],m:a[2]}));
+// tablas [km/h, MET]
+const DIST=[
+{n:"Caminar",e:"🚶",t:[[3.2,2.8],[4.8,3.5],[5.6,4.3],[6.4,5],[7.2,7],[8,8.3]]},
+{n:"Correr",e:"🏃",t:[[6.4,6],[8,8.3],[9.7,9.8],[11.3,11],[12.9,11.8],[14.5,12.8],[16.1,14.5]]},
+{n:"Bicicleta",e:"🚴",t:[[10,3.5],[16,6],[19.2,6.8],[22.4,8],[25.6,10],[30.6,12],[35,15.8]]},
+{n:"Natación (crol)",e:"🏊",t:[[1,4.8],[2,5.8],[3,8.3],[4,10]]},
+{n:"Remo",e:"🚣",t:[[4,4.8],[6,7],[8,8.5],[10,12]]},
+{n:"Patinaje",e:"⛸️",t:[[8,5.5],[14,7.5],[20,9.8]]},
+{n:"Senderismo",e:"🥾",t:[[3,5.3],[5,6.5]]}
+];
+const $=id=>document.getElementById(id);
+let mode="dist", sel=DIST[1], wU="kg", dU="km", db=null, SQL=null;
+
+function met(t,v){if(v<=t[0][0])return t[0][1];for(let i=1;i<t.length;i++){if(v<=t[i][0]){const[a,b]=[t[i-1],t[i]];return a[1]+(b[1]-a[1])*(v-a[0])/(b[0]-a[0]);}}return t[t.length-1][1];}
+const kgNow=()=>{const v=parseFloat($("peso").value);return wU==="lb"?v/KG_LB:v;};
+const kmNow=()=>{const v=parseFloat($("dist").value);return dU==="mi"?v*KM_MI:v;};
+const fmt=(n,d=0)=>Number(n).toLocaleString("es",{minimumFractionDigits:d,maximumFractionDigits:d});
+
+function calc(){
+ const kg=kgNow(), min=parseFloat($("min").value);
+ if(!(kg>0)||!(min>0))return null;
+ if(mode==="tiempo")return{m:sel.m,kcal:sel.m*kg*min/60,kg,min,km:null,v:null};
+ const km=kmNow(); if(!(km>0))return null;
+ const v=km/(min/60), m=met(sel.t,v);
+ return{m,kcal:m*kg*min/60,kg,min,km,v};
+}
+function update(){
+ const r=calc();$("kcal").textContent=r?fmt(r.kcal):"0";
+ if(!r){$("det").textContent="Completa peso, duración"+(mode==="dist"?" y distancia":"");}
+ else if(mode==="dist"){const v=dU==="mi"?r.v/KM_MI:r.v;$("det").textContent=`kilocalorías · ${fmt(v,1)} ${dU}/h · MET ${fmt(r.m,1)}`;}
+ else $("det").textContent=`kilocalorías · MET ${fmt(r.m,1)}`;
+ $("add").disabled=!r||!db;
+}
+function renderActs(){
+ const list=mode==="dist"?DIST:TIEMPO; if(!list.includes(sel))sel=list[0];
+ $("acts").innerHTML="";
+ list.forEach(a=>{const b=document.createElement("button");b.type="button";b.className="act";b.setAttribute("aria-pressed",a===sel);
+  const e=document.createElement("span");e.className="e";e.textContent=a.e;b.append(e,a.n);
+  b.onclick=()=>{sel=a;renderActs();update();};$("acts").appendChild(b);});
+ $("boxDist").hidden=mode!=="dist";
+}
+function setSeg(id,attr,val){document.querySelectorAll("#"+id+" button").forEach(b=>b.setAttribute("aria-pressed",b.dataset[attr]===val));}
+$("segM").onclick=e=>{const m=e.target.dataset.m;if(!m)return;mode=m;setSeg("segM","m",m);renderActs();update();};
+$("segW").onclick=e=>{const u=e.target.dataset.u;if(!u||u===wU)return;
+ const v=parseFloat($("peso").value);if(v>0)$("peso").value=(u==="lb"?v*KG_LB:v/KG_LB).toFixed(1);
+ wU=u;setSeg("segW","u",u);$("lPeso").textContent=`Peso (${u})`;update();renderAll();};
+$("segD").onclick=e=>{const u=e.target.dataset.u;if(!u||u===dU)return;
+ const v=parseFloat($("dist").value);if(v>0)$("dist").value=(u==="mi"?v/KM_MI:v*KM_MI).toFixed(2);
+ dU=u;setSeg("segD","u",u);$("lDist").textContent=`Distancia (${u})`;update();renderAll();};
+["peso","dist","min"].forEach(i=>$(i).addEventListener("input",update));
+function ahora(){const d=new Date(),p=n=>String(n).padStart(2,"0");return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
+$("cuando").value=ahora();
+
+/* ---------- IndexedDB (persistencia del archivo SQLite) ---------- */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("calorias-sqlite",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function idbGet(){const d=await idb();return new Promise((res,rej)=>{const q=d.transaction("kv").objectStore("kv").get("db");q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function idbSet(v){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,"db");t.oncomplete=res;t.onerror=()=>rej(t.error);});}
+async function guardar(){try{await idbSet(db.export());}catch(e){status("No se pudo guardar en el navegador. Usa “Descargar .sqlite” para respaldar.",true);}}
+function status(t,err){const s=$("status");s.textContent=t;s.classList.toggle("err",!!err);}
+
+/* ---------- SQLite ---------- */
+const SCHEMA=`CREATE TABLE IF NOT EXISTS actividades(
+ id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT NOT NULL, hora TEXT NOT NULL,
+ actividad TEXT NOT NULL, modo TEXT NOT NULL, duracion_min REAL NOT NULL,
+ distancia_km REAL, velocidad_kmh REAL, peso_kg REAL NOT NULL, met REAL NOT NULL, kcal REAL NOT NULL,
+ creado TEXT DEFAULT (datetime('now','localtime')));`;
+const q=(sql,p=[])=>{const r=db.exec(sql,p);return r.length?r[0].values:[];};
+async function iniciar(){
+ try{
+  SQL=await initSqlJs({locateFile:f=>`https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${f}`});
+  let data=null;try{data=await idbGet();}catch(e){}
+  db=data?new SQL.Database(data):new SQL.Database();
+  db.run(SCHEMA);
+  status(data?"Base de datos SQLite cargada.":"Base de datos SQLite nueva creada.");
+  renderAll();update();
+ }catch(e){status("No se pudo cargar SQLite. Conéctate a internet y recarga la página.",true);}
+}
+$("add").onclick=async()=>{
+ const r=calc();if(!r||!db)return;
+ const [fecha,hora]=($("cuando").value||ahora()).split("T");
+ db.run("INSERT INTO actividades(fecha,hora,actividad,modo,duracion_min,distancia_km,velocidad_kmh,peso_kg,met,kcal) VALUES(?,?,?,?,?,?,?,?,?,?)",
+  [fecha,hora,sel.n,mode,r.min,r.km,r.v,r.kg,r.m,r.kcal]);
+ await guardar();renderAll();$("cuando").value=ahora();status("Actividad guardada.");
+};
+function renderAll(){
+ if(!db)return;
+ const tb=$("rows");tb.innerHTML="";
+ const rows=q("SELECT id,fecha,hora,actividad,duracion_min,distancia_km,velocidad_kmh,peso_kg,kcal FROM actividades ORDER BY fecha DESC,hora DESC,id DESC");
+ $("vacio").hidden=rows.length>0;
+ $("thD").textContent=`Distancia (${dU})`;$("thV").textContent=`Velocidad (${dU}/h)`;$("thP").textContent=`Peso (${wU})`;
+ rows.forEach(r=>{
+  const [id,f,h,a,m,km,v,kg,k]=r;const tr=document.createElement("tr");
+  const dd=km==null?"—":fmt(dU==="mi"?km/KM_MI:km,2), vv=v==null?"—":fmt(dU==="mi"?v/KM_MI:v,1), pp=fmt(wU==="lb"?kg*KG_LB:kg,1);
+  [f,h,a,fmt(m,0)+" min",dd,vv,pp,fmt(k)].forEach((t,i)=>{const td=document.createElement("td");td.textContent=t;if(i===7)td.className="k";tr.appendChild(td);});
+  const td=document.createElement("td"),b=document.createElement("button");b.textContent="✕";b.setAttribute("aria-label","Borrar registro");
+  b.onclick=async()=>{db.run("DELETE FROM actividades WHERE id=?",[id]);await guardar();renderAll();};
+  td.appendChild(b);tr.appendChild(td);tb.appendChild(tr);
+ });
+ $("sHoy").textContent=fmt(q("SELECT COALESCE(SUM(kcal),0) FROM actividades WHERE fecha=date('now','localtime')")[0][0]);
+ $("s7").textContent=fmt(q("SELECT COALESCE(SUM(kcal),0) FROM actividades WHERE fecha>=date('now','localtime','-6 days')")[0][0]);
+ $("sN").textContent=fmt(q("SELECT COUNT(*) FROM actividades")[0][0]);
+ const tk=q("SELECT COALESCE(SUM(distancia_km),0) FROM actividades")[0][0];
+ $("sKm").textContent=fmt(dU==="mi"?tk/KM_MI:tk,1);$("sKmL").textContent=(dU==="mi"?"millas":"km")+" acumulados";
+}
+function bajar(blob,nombre){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=nombre;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+$("expDb").onclick=()=>{if(db)bajar(new Blob([db.export()],{type:"application/x-sqlite3"}),"calorias.sqlite");};
+$("expCsv").onclick=()=>{if(!db)return;const res=db.exec("SELECT id,fecha,hora,actividad,modo,duracion_min,distancia_km,velocidad_kmh,peso_kg,met,kcal FROM actividades ORDER BY fecha,hora");
+ const cols=["id","fecha","hora","actividad","modo","duracion_min","distancia_km","velocidad_kmh","peso_kg","met","kcal"];
+ const esc=v=>v==null?"":`"${String(v).replace(/"/g,'""')}"`;
+ const csv=[cols.join(",")].concat((res.length?res[0].values:[]).map(r=>r.map(esc).join(","))).join("\n");
+ bajar(new Blob(["\ufeff"+csv],{type:"text/csv"}),"calorias.csv");};
+$("impBtn").onclick=()=>$("impFile").click();
+$("impFile").onchange=async e=>{const f=e.target.files[0];if(!f||!SQL)return;
+ if(!confirm("Esto reemplazará el registro actual por el del archivo. ¿Continuar?")){e.target.value="";return;}
+ try{const n=new SQL.Database(new Uint8Array(await f.arrayBuffer()));n.run(SCHEMA);n.exec("SELECT COUNT(*) FROM actividades");db=n;await guardar();renderAll();status("Base importada correctamente.");}
+ catch(err){status("El archivo no es una base SQLite válida con la tabla “actividades”.",true);}
+ e.target.value="";};
+
+renderActs();update();
+if(typeof initSqlJs==="function")iniciar();else status("No se pudo cargar SQLite. Conéctate a internet y recarga la página.",true);
+</script>
+</body>
+</html>
